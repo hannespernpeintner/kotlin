@@ -92,14 +92,29 @@ class ExposedVisibilityChecker(private val trace: DiagnosticSink = DO_NOTHING) {
         }
         functionDescriptor.valueParameters.forEachIndexed { i, parameterDescriptor ->
             val restricting = parameterDescriptor.type.leastPermissiveDescriptor(functionVisibility)
-            if (restricting != null && i < function.valueParameters.size) {
-                trace.report(
-                    Errors.EXPOSED_PARAMETER_TYPE.on(
-                        function.valueParameters[i], functionVisibility,
-                        restricting, restricting.effectiveVisibility()
+            if (i < function.valueParameters.size) {
+                val valueParameter = function.valueParameters[i]
+                if (restricting != null) {
+                    trace.report(
+                        Errors.EXPOSED_PARAMETER_TYPE.on(
+                            valueParameter, functionVisibility,
+                            restricting, restricting.effectiveVisibility()
+                        )
                     )
-                )
-                result = false
+                    result = false
+                } else if (functionDescriptor is ClassConstructorDescriptor && valueParameter.hasValOrVar()) {
+                    val classVisibility = functionDescriptor.constructedClass.effectiveVisibility()
+                    val restrictingByClass = parameterDescriptor.type.leastPermissiveDescriptor(classVisibility)
+                    if (restrictingByClass != null) {
+                        trace.report(
+                            Errors.EXPOSED_PROPERTY_TYPE_IN_CONSTRUCTOR.on(
+                                valueParameter, classVisibility,
+                                restrictingByClass, restrictingByClass.effectiveVisibility()
+                            )
+                        )
+                        result = false
+                    }
+                }
             }
         }
         return result and checkMemberReceiver(function.receiverTypeReference, functionDescriptor)

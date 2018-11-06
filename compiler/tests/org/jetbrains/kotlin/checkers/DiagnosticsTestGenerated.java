@@ -7315,6 +7315,21 @@ public class DiagnosticsTestGenerated extends AbstractDiagnosticsTest {
                 runTest("compiler/testData/diagnostics/tests/exposed/privateFromLocal.kt");
             }
 
+            @TestMetadata("propertyInConstructorOfPrivateClass.kt")
+            public void testPropertyInConstructorOfPrivateClass() throws Exception {
+                runTest("compiler/testData/diagnostics/tests/exposed/propertyInConstructorOfPrivateClass.kt");
+            }
+
+            @TestMetadata("propertyInPrivateConstructor.kt")
+            public void testPropertyInPrivateConstructor() throws Exception {
+                runTest("compiler/testData/diagnostics/tests/exposed/propertyInPrivateConstructor.kt");
+            }
+
+            @TestMetadata("propertyInSimpleConstructor.kt")
+            public void testPropertyInSimpleConstructor() throws Exception {
+                runTest("compiler/testData/diagnostics/tests/exposed/propertyInSimpleConstructor.kt");
+            }
+
             @TestMetadata("protected.kt")
             public void testProtected() throws Exception {
                 runTest("compiler/testData/diagnostics/tests/exposed/protected.kt");
