@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.config.LanguageFeature;
 import org.jetbrains.kotlin.config.LanguageVersionSettings;
 import org.jetbrains.kotlin.descriptors.*;
 import org.jetbrains.kotlin.descriptors.annotations.Annotations;
+import org.jetbrains.kotlin.descriptors.impl.LocalVariableDescriptor;
 import org.jetbrains.kotlin.descriptors.impl.TypeAliasConstructorDescriptor;
 import org.jetbrains.kotlin.descriptors.impl.ValueParameterDescriptorImpl;
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation;
@@ -50,6 +51,7 @@ import static org.jetbrains.kotlin.js.translate.context.UsageTrackerKt.getNameFo
 import static org.jetbrains.kotlin.js.translate.utils.AnnotationsUtils.isNativeObject;
 import static org.jetbrains.kotlin.js.translate.utils.BindingUtils.getDescriptorForElement;
 import static org.jetbrains.kotlin.js.translate.utils.JsAstUtils.pureFqn;
+import static org.jetbrains.kotlin.resolve.BindingContextUtils.isCapturedInClosure;
 
 /**
  * All the info about the state of the translation process.
@@ -500,6 +502,11 @@ public class TranslationContext {
     }
 
     @NotNull
+    public Set<LocalVariableDescriptor> getCapturedUninitializedValLocals() {
+        return staticContext.getCapturedUninitializedValLocals();
+    }
+
+    @NotNull
     public JsFunction getFunctionObject(@NotNull CallableDescriptor descriptor) {
         return staticContext.getFunctionWithScope(descriptor);
     }
@@ -791,6 +798,15 @@ public class TranslationContext {
     public boolean shouldBeDeferred(@NotNull ClassConstructorDescriptor constructor) {
         ClassDescriptor classDescriptor = constructor.getContainingDeclaration();
         return staticContext.getDeferredCallSites().containsKey(classDescriptor);
+    }
+
+    public boolean isBoxedLocalCapturedInClosure(CallableDescriptor descriptor) {
+        if (isCapturedInClosure(bindingContext(), descriptor)) {
+            VariableDescriptor localVariable = (VariableDescriptor) descriptor;
+            return localVariable.isVar() || getCapturedUninitializedValLocals().contains(localVariable);
+        }
+
+        return false;
     }
 
     public void deferConstructorCall(@NotNull ClassConstructorDescriptor constructor, @NotNull List<JsExpression> invocationArgs) {

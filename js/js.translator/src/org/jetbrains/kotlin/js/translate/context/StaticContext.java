@@ -147,6 +147,9 @@ public final class StaticContext {
 
     private final Map<VariableDescriptorWithAccessors, JsName> propertyMetadataVariables = new HashMap<>();
 
+    @NotNull
+    private final Set<LocalVariableDescriptor> capturedUninitializedValLocal = new HashSet<>();
+
     private final boolean isStdlib;
 
     private static final Set<String> BUILTIN_JS_PROPERTIES = Sets.union(
@@ -215,6 +218,11 @@ public final class StaticContext {
     @NotNull
     public SourceFilePathResolver getSourceFilePathResolver() {
         return sourceFilePathResolver;
+    }
+
+    @NotNull
+    public Set<LocalVariableDescriptor> getCapturedUninitializedValLocals() {
+        return capturedUninitializedValLocal;
     }
 
     @NotNull

@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.descriptors.DeclarationDescriptor;
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor;
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor;
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor;
+import org.jetbrains.kotlin.descriptors.impl.LocalVariableDescriptor;
 import org.jetbrains.kotlin.idea.MainFunctionDetector;
 import org.jetbrains.kotlin.js.backend.ast.*;
 import org.jetbrains.kotlin.js.backend.ast.metadata.MetadataProperties;
@@ -42,16 +43,14 @@ import org.jetbrains.kotlin.js.translate.context.TranslationContext;
 import org.jetbrains.kotlin.js.translate.declaration.FileDeclarationVisitor;
 import org.jetbrains.kotlin.js.translate.expression.ExpressionVisitor;
 import org.jetbrains.kotlin.js.translate.expression.PatternTranslator;
+import org.jetbrains.kotlin.js.translate.operation.AssignmentTranslator;
 import org.jetbrains.kotlin.js.translate.reference.ReferenceTranslator;
 import org.jetbrains.kotlin.js.translate.test.JSTestGenerator;
 import org.jetbrains.kotlin.js.translate.utils.*;
 import org.jetbrains.kotlin.js.translate.utils.mutator.AssignToExpressionMutator;
 import org.jetbrains.kotlin.name.FqNameUnsafe;
 import org.jetbrains.kotlin.name.Name;
-import org.jetbrains.kotlin.psi.KtDeclaration;
-import org.jetbrains.kotlin.psi.KtExpression;
-import org.jetbrains.kotlin.psi.KtFile;
-import org.jetbrains.kotlin.psi.KtSimpleNameExpression;
+import org.jetbrains.kotlin.psi.*;
 import org.jetbrains.kotlin.resolve.BindingTrace;
 import org.jetbrains.kotlin.resolve.DescriptorUtils;
 import org.jetbrains.kotlin.resolve.bindingContextUtil.BindingContextUtilsKt;
@@ -426,6 +425,7 @@ public final class Translation {
                 DeclarationDescriptor descriptor = BindingUtils.getDescriptorForElement(context.bindingContext(), declaration);
                 fileMemberScope.add(descriptor);
                 if (!AnnotationsUtils.isPredefinedObject(descriptor)) {
+                    collectLocalValsToBeBoxed(declaration, context);
                     declaration.accept(fileVisitor, context);
                 }
             }
@@ -436,6 +436,58 @@ public final class Translation {
         catch (RuntimeException | AssertionError e) {
             throw new TranslationRuntimeException(file, e);
         }
+    }
+
+    private static void collectLocalValsToBeBoxed(@NotNull KtDeclaration declaration, @NotNull TranslationContext context) {
+        Set<LocalVariableDescriptor> localVals = context.getCapturedUninitializedValLocals();
+        localVals.clear();
+        declaration.accept(new KtVisitorVoid() {
+
+            private FunctionDescriptor currentFunction;
+
+            @Override
+            public void visitKtElement(@NotNull KtElement element) {
+                element.acceptChildren(this);
+            }
+
+            @Override
+            public void visitNamedFunction(@NotNull KtNamedFunction function) {
+                FunctionDescriptor oldDescriptor = currentFunction;
+                currentFunction = BindingUtils.getFunctionDescriptor(context.bindingContext(), function);
+                super.visitNamedFunction(function);
+                currentFunction = oldDescriptor;
+            }
+
+            @Override
+            public void visitLambdaExpression(@NotNull KtLambdaExpression lambdaExpression) {
+                FunctionDescriptor oldDescriptor = currentFunction;
+                currentFunction = BindingUtils.getFunctionDescriptor(context.bindingContext(), lambdaExpression.getFunctionLiteral());
+                super.visitLambdaExpression(lambdaExpression);
+                currentFunction = oldDescriptor;
+            }
+
+            @Override
+            public void visitBinaryExpression(@NotNull KtBinaryExpression expression) {
+
+                super.visitBinaryExpression(expression);
+
+                if (!AssignmentTranslator.isAssignmentOperator(PsiUtils.getOperationToken(expression))) return;
+
+                KtSimpleNameExpression left = PsiUtils.getSimpleName(Objects.requireNonNull(expression.getLeft()));
+
+                if (left == null) return;
+
+                DeclarationDescriptor descriptor = BindingUtils.getDescriptorForReferenceExpression(context.bindingContext(), left);
+
+                if (descriptor instanceof LocalVariableDescriptor) {
+                    LocalVariableDescriptor local = (LocalVariableDescriptor) descriptor;
+
+                    if (local.isVar()) return;
+
+                    if (local.getContainingDeclaration() != currentFunction) localVals.add(local);
+                }
+            }
+        });
     }
 
     private static void defineModule(@NotNull JsProgram program, @NotNull List<JsStatement> statements, @NotNull String moduleId) {
