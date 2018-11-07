@@ -21,7 +21,7 @@ import kotlin.annotation.AnnotationRetention.SOURCE
 import kotlin.annotation.AnnotationTarget.*
 
 /**
- * Marks the annotated class, typealias, function, property or property accessor as deprecated.
+ * Marks the annotated declaration as deprecated.
  *
  * @property message The message explaining the deprecation and recommending an alternative API to use.
  * @property replaceWith If present, specifies a code fragment which should be used as a replacement for
