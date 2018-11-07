@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.DescriptorUtilsKt;
 import org.jetbrains.kotlin.resolve.inline.InlineUtil;
 import org.jetbrains.kotlin.resolve.scopes.receivers.ExtensionReceiver;
 import org.jetbrains.kotlin.serialization.js.ModuleKind;
+import org.jetbrains.kotlin.types.expressions.PreliminaryDeclarationVisitor;
 
 import java.util.*;
 
@@ -50,6 +51,8 @@ import static org.jetbrains.kotlin.js.translate.context.UsageTrackerKt.getNameFo
 import static org.jetbrains.kotlin.js.translate.utils.AnnotationsUtils.isNativeObject;
 import static org.jetbrains.kotlin.js.translate.utils.BindingUtils.getDescriptorForElement;
 import static org.jetbrains.kotlin.js.translate.utils.JsAstUtils.pureFqn;
+import static org.jetbrains.kotlin.resolve.BindingContextUtils.isCapturedInClosure;
+import static org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowValueKindUtilsKt.hasNoWritersInClosures;
 
 /**
  * All the info about the state of the translation process.
@@ -791,6 +794,20 @@ public class TranslationContext {
     public boolean shouldBeDeferred(@NotNull ClassConstructorDescriptor constructor) {
         ClassDescriptor classDescriptor = constructor.getContainingDeclaration();
         return staticContext.getDeferredCallSites().containsKey(classDescriptor);
+    }
+
+    private boolean isValWithWriterInDifferentScope(VariableDescriptor descriptor) {
+        PreliminaryDeclarationVisitor preliminaryVisitor =
+                PreliminaryDeclarationVisitor.Companion.getVisitorByVariable(descriptor, bindingContext());
+        return preliminaryVisitor == null || !hasNoWritersInClosures(descriptor.getContainingDeclaration(), preliminaryVisitor.writers(descriptor), bindingContext());
+    }
+
+    public boolean isBoxedLocalCapturedInClosure(CallableDescriptor descriptor) {
+        if (isCapturedInClosure(bindingContext(), descriptor)) {
+            VariableDescriptor localVariable = (VariableDescriptor) descriptor;
+            return localVariable.isVar() || isValWithWriterInDifferentScope(localVariable);
+        }
+        return false;
     }
 
     public void deferConstructorCall(@NotNull ClassConstructorDescriptor constructor, @NotNull List<JsExpression> invocationArgs) {
