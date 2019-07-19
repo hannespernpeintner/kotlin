@@ -3,6 +3,86 @@
 [![Maven Central](https://img.shields.io/maven-central/v/org.jetbrains.kotlin/kotlin-maven-plugin.svg)](https://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.jetbrains.kotlin%22)
 [![GitHub license](https://img.shields.io/badge/license-Apache%20License%202.0-blue.svg?style=flat)](https://www.apache.org/licenses/LICENSE-2.0)
 
+# Prototype implementation of companion vals
+
+This repository is a fork of the official Kotlin project where I added a feature called companion vals to the language.
+The proposal was not created by me and can be found on https://github.com/Kotlin/KEEP/pull/106
+
+I therefore changed some internals of the Kotlin compiler and mostly added some scopes and resolutions here and there.
+Some changes are heavily inspired by or even copy-pasted from code from the typeclasses proposal in KEEP-87.
+Without said contributions from people like truizlop and JorgeCastilloPrz, I wouldn't have made it that far, so I want to say THANKS a lot.
+
+Furthermore, I want to stress that I don't want to compete in any way with the typeclasses proposal, of which I am really convinced of as now.
+Still, the implicit value passing mechanism in typeclasses proposal seems to be very controversial, and I see companion vals as a possible
+alternative that solves at least the "problem" of the need for with(xxx) {} for local extension functions and the compound extension
+use case from another proposal that can be found on https://github.com/Kotlin/KEEP/pull/176.
+
+# Companion vals
+
+It's not too clear for me, what the original proposal contains, so I implemented my own vision of what it could look like.
+In short, at different places (function signatures, lambda headers, top levels, class bodies etc.), one should be able to
+define a val or a parameter as a companion (similar to companion objects that already exist in Kotlin) and use it as a receiver
+in the corresponding scope.
+
+## Examples
+
+Examples of what this feature is all about can be found in the tests folder "compiler/testData/codegen/box/companionval".
+
+Here are two nice and short examples what companion vals could enable:
+
+```kotlin
+class Printer<T> {
+    fun T.customToString() = "printed:" + this.toString()
+}
+
+class Foo(val someString: String)
+
+
+fun main() {
+    companion val printer: Printer<String> = Printer()
+
+    val result = Foo("bar").someString.customToString()
+
+    assert(result == "printed:bar")
+}
+```
+
+```kotlin
+class ServerBackend {
+    fun <T> executeInTransaction(action: ActionContext.() -> T) {}
+}
+
+class Printer {
+    fun Any.customToString(): String = "custom: $this"
+}
+
+class ActionContext(companion val coroutineScope: CoroutineScope,
+                    companion val printer: Printer)
+
+fun main() {
+
+    ServerBackend().executeInTransaction {
+        async { println("I am async") }
+        println("foo".customToString())
+    }
+}
+```
+
+# Missing things
+
+* I wasn't able to implement nested lambdas correctly. In the example above for instance, one should be able to nest async and
+customToString calls but I encountered problems with the stack to access the fields.
+* The proposal mentions that members of accessible companion properties of a class should be accessible without qualifying the property,
+in the like of `ActionContext().launch {}` in the example above. Haven't had time to implement this yet, but does work in extension
+functions, as shown.
+
+# Test it
+
+If you already used the Kotlin repository, you should be able to use my fork in the same way. Just open the project,
+set all environment variables (see official instructions below) and use the IDEA gradle task to open an IDE.
+
+Alternatively, you can tell me what files from the dist folder I have to include in a zip archive and then I will upload a snapshot :)
+
 # Kotlin Programming Language
 
 Welcome to [Kotlin](https://kotlinlang.org/)! Some handy links:
